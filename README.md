@@ -7,3 +7,5 @@ He had developed it with his own logic and style. But in [MY VIEW](https://githu
 - Ability to select game's Grid size
 - When user wins a box, the turn moves to the other user rather than the user who won the box
 - Ability draw/mark line with the help of mouse click
+
+In this repository, I will update the above mentioned shortcomings and add some more functionality.
