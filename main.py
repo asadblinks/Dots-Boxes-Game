@@ -1,7 +1,11 @@
 from dots import Game
+from config import gc
+
+def main() -> None:
+    """Initialize and run the Dots and Boxes game."""
+    game = Game()
+    game.initialize_game(gc.DEFAULT_GRID_SIZE)
+    game.run()
 
 if __name__ == "__main__":
-    cell_size = 3
-    g = Game()
-    g.initialize_game(cell_size)
-    g.run()
+    main()

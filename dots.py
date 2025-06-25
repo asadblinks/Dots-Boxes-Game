@@ -1,65 +1,99 @@
 import pygame
 import random
-
-WHITE = (255, 255, 255)
-RED = (252, 91, 122)
-BLUE = (78, 193, 246)
-GREEN = (0, 255, 0)
-BLACK = (12, 12, 12)
-FONT_SIZE = 24
-CELLSIZE = 80
-PAD = 100
+from typing import List, Tuple, Dict, Optional
+from config import gc
 
 pygame.font.init()
-font = pygame.font.SysFont("verdana", FONT_SIZE)
+font = pygame.font.SysFont(gc.FONT_NAME, gc.FONT_SIZE)
 
 class Cell:
+    """A class representing a single cell in the Dots and Boxes game.
 
-    def __init__(self, r, c, reset=False):
+    Each cell is a square that can have lines drawn on any of its four sides.
+    When all sides are drawn, the cell is completed and owned by the player who
+    completed it.
+
+    Attributes:
+        r (int): Row coordinate of the cell
+        c (int): Column coordinate of the cell
+        color (Tuple[int, int, int]): RGB color value of the cell when filled
+        text (Optional[str]): Text to display in the cell when completed
+        sides (List[bool]): State of each side [LEFT, TOP, RIGHT, BOTTOM]
+    """
+
+    def __init__(self, r: int, c: int, reset: bool = False) -> None:
+        """Initialize a new cell.
+
+        Args:
+            r: Row coordinate of the cell
+            c: Column coordinate of the cell
+            reset: Whether this is a reset operation
+        """
         self.r = r
         self.c = c
         self.reset = reset
-        self.color = None
-        self.text = None
-        self.edge_threshold = 10
-        self.instances = list()
+        self.color = gc.COLORS['WHITE']
+        self.text: Optional[str] = None
+        self.edge_threshold = gc.EDGE_THRESHOLD
+        self.instances: List['Cell'] = []
 
-        self.rect = pygame.Rect((self.c, self.r, CELLSIZE, CELLSIZE))
+        self.rect = pygame.Rect((self.c, self.r, gc.CELL_SIZE, gc.CELL_SIZE))
 
         self.left = self.rect.left
         self.top = self.rect.top
         self.right = self.rect.right
         self.bottom = self.rect.bottom
 
-        self.edges = {
+        self.edges: Dict[int, List[Tuple[int, int]]] = {
             self.left: [(self.left, self.top), (self.left, self.bottom)],
             self.top: [(self.left, self.top), (self.right, self.top)],
             self.right: [(self.right, self.top), (self.right, self.bottom)],
             self.bottom: [(self.left, self.bottom), (self.right, self.bottom)]
         }
 
-        #    Sides = [LEFT,  TOP,   RIGHT, BOTTOM]
-        self.sides = [False, False, False, False]
+        # Sides = [LEFT, TOP, RIGHT, BOTTOM]
+        self.sides: List[bool] = [False, False, False, False]
 
-    def set_instances(self, items):
+    def set_instances(self, items: List['Cell']) -> None:
+        """Set the list of cell instances.
+
+        Args:
+            items: List of Cell objects to set as instances
+        """
         self.instances = items.copy()
 
-    def get_instances(self):
+    def get_instances(self) -> List['Cell']:
+        """Get a copy of the cell instances list.
+
+        Returns:
+            A copy of the cell instances list
+        """
         return self.instances.copy()
 
-    def update(self, window_panel):
-        # Display function to draw line when cell's side is clicked
+    def update(self, window_panel: pygame.Surface) -> None:
+        """Update the cell's visual representation.
+
+        Draws the cell's current state to the window, including any completed
+        sides and the cell fill if completed.
+
+        Args:
+            window_panel: Pygame surface to draw on
+        """
         if all(self.sides):
             pygame.draw.rect(window_panel, self.color, self.rect)
-            text = font.render(self.text, True, BLACK)
-            window_panel.blit(text, (self.rect.centerx - 10, self.rect.centery - 15))
+            if self.text:
+                text = font.render(self.text, True, gc.COLORS['BLACK'])
+                window_panel.blit(text, (self.rect.centerx - 10, self.rect.centery - 15))
 
         for i, side in enumerate(self.sides):
             if side:
                 edge_side = list(self.edges.keys())[i]
-                line_start = tuple(v - 1 if v == edge_side else v for v in self.edges[edge_side][0])
-                line_end = tuple(v - 1 if v == edge_side else v for v in self.edges[edge_side][1])
-                pygame.draw.line(window_panel, BLACK, line_start, line_end, 2)
+                line_start = tuple(
+                    v - 1 if v == edge_side else v for v in self.edges[edge_side][0])
+                line_end = tuple(
+                    v - 1 if v == edge_side else v for v in self.edges[edge_side][1])
+                pygame.draw.line(window_panel, gc.COLORS['BLACK'],
+                               line_start, line_end, 2)
 
     def update_sides(self, edge_value, user):
         # Update cell's side and other cell around it.
@@ -72,7 +106,7 @@ class Cell:
                 cell_obj.sides[s_ind] = True
                 if all(cell_obj.sides):
                     cell_fill += 1
-                    cell_obj.color = GREEN if user == 'X' else RED
+                    cell_obj.color = gc.COLORS['GREEN'] if user == 'X' else gc.COLORS['RED']
                     cell_obj.text = user
                 # print(cell_obj.rect, cell_obj.sides)
         return cell_fill
@@ -106,19 +140,54 @@ class Cell:
         return is_turn_next, n_cell_fill
 
 class Game:
-    def __init__(self):
-        self.id = None
+    """Main game controller class for Dots and Boxes.
+
+    This class manages the game state, including player turns, scoring,
+    and game progression.
+
+    Attributes:
+        id (Optional[str]): Unique identifier for the game
+        ready (bool): Whether the game is ready to start
+        grid_ready (bool): Whether the game grid is initialized
+        turn (int): Current player's turn (0 or 1)
+        players (List[str]): List of player identifiers
+        moves (List[bool]): List tracking if it's each player's turn
+        player (str): Current player's identifier
+        p1_score (int): Player 1's score
+        p2_score (int): Player 2's score
+        gameover (bool): Whether the game has ended
+        cells_completed (int): Number of completed cells
+    """
+
+    def __init__(self) -> None:
+        """Initialize a new game instance."""
+        self.id: Optional[str] = None
         self.ready = False
         self.grid_ready = False
         self.reset(False)
 
-    def set_gameID(self, id):
+    def set_gameID(self, id: str) -> None:
+        """Set the game's unique identifier.
+
+        Args:
+            id: Unique identifier for the game
+        """
         self.id = id
 
-    def get_gameID(self):
+    def get_gameID(self) -> Optional[str]:
+        """Get the game's unique identifier.
+
+        Returns:
+            The game's unique identifier or None if not set
+        """
         return self.id
 
-    def reset(self, reset=False):
+    def reset(self, reset_grid: bool = False) -> None:
+        """Reset the game state.
+
+        Args:
+            reset_grid: Whether to also reset the game grid
+        """
         self.turn = random.randint(0, 1)
         self.players = ['X', 'O']
         self.moves = [False] * len(self.players)
@@ -128,16 +197,21 @@ class Game:
         self.p1_score = self.p2_score = 0
         self.gameover = False
         self.cells_completed = 0
-        if reset:
+        if reset_grid:
             self.set_cells()
 
-    def initialize_game(self, cells_dim):
+    def initialize_game(self, cells_dim: int) -> None:
+        """Initialize the game grid with specified dimensions.
+
+        Args:
+            cells_dim: Number of cells per row/column
+        """
         self.cells_dim = cells_dim
         ROWS = COLS = self.cells_dim
-        PADDING = PAD // 2
-        self.ROW_GRID = [r * CELLSIZE + 2 * PADDING for r in range(ROWS + 1)]
+        PADDING = gc.PADDING // 2
+        self.ROW_GRID = [r * gc.CELL_SIZE + 2 * PADDING for r in range(ROWS + 1)]
         self.HEIGHT = max(self.ROW_GRID) + PADDING
-        self.COL_GRID = [c * CELLSIZE + PADDING for c in range(COLS + 1)]
+        self.COL_GRID = [c * gc.CELL_SIZE + PADDING for c in range(COLS + 1)]
         self.WIDTH = max(self.COL_GRID) + PADDING
         self.total_cells = ROWS * COLS
         self.set_cells()
@@ -159,7 +233,7 @@ class Game:
     def draw_grid(self, win):
         for r in self.ROW_GRID.copy():
             for c in self.COL_GRID.copy():
-                pygame.draw.circle(win, BLACK, (c, r), 4)
+                pygame.draw.circle(win, gc.COLORS['BLACK'], (c, r), 4)
 
     def is_cell_clicked(self, cell, mouse_cord):
         cell.set_instances(self.get_cells())
@@ -198,7 +272,7 @@ class Game:
         clock = pygame.time.Clock()
         while run:
             clock.tick(60)
-            GAME_WINDOW.fill(WHITE)
+            GAME_WINDOW.fill(gc.COLORS['WHITE'])
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -221,19 +295,19 @@ class Game:
             self.draw_grid(GAME_WINDOW)
 
             if mouse_cord:
-                pygame.draw.circle(GAME_WINDOW, RED, mouse_cord, 2)
+                pygame.draw.circle(GAME_WINDOW, gc.COLORS['RED'], mouse_cord, 2)
 
             for cell in cells:
                 if mouse_cord and cell.rect.collidepoint(mouse_cord):
                     self.is_cell_clicked(cell, mouse_cord)
                 cell.update(GAME_WINDOW)
 
-            p1img = font.render('Player 1: {}'.format(self.p1_score), True, BLUE)
+            p1img = font.render('Player 1: {}'.format(self.p1_score), True, gc.COLORS['BLUE'])
             p1rect = p1img.get_rect()
-            text_pads = PAD // 3
+            text_pads = gc.PADDING // 3
             p1rect.x, p1rect.y = text_pads, 25
 
-            p2img = font.render('Player 2: {}'.format(self.p2_score), True, BLUE)
+            p2img = font.render('Player 2: {}'.format(self.p2_score), True, gc.COLORS['BLUE'])
             p2rect = p2img.get_rect()
             p2rect.right, p2rect.y = WIDTH - text_pads, 25
 
@@ -241,22 +315,24 @@ class Game:
             GAME_WINDOW.blit(p2img, p2rect)
 
             turn_rectangle = p1rect if self.player == 'X' else p2rect
-            pygame.draw.line(GAME_WINDOW, RED, (turn_rectangle.x, turn_rectangle.bottom + 2), (turn_rectangle.right, turn_rectangle.bottom + 2), 4)
+            pygame.draw.line(GAME_WINDOW, gc.COLORS['RED'],
+                           (turn_rectangle.x, turn_rectangle.bottom + 2),
+                           (turn_rectangle.right, turn_rectangle.bottom + 2), 4)
 
             if self.gameover:
                 rect = pygame.Rect((50, 100, WIDTH - 100, HEIGHT - 200))
-                pygame.draw.rect(GAME_WINDOW, WHITE, rect)
-                pygame.draw.rect(GAME_WINDOW, RED  , rect, 2)
+                pygame.draw.rect(GAME_WINDOW, gc.COLORS['WHITE'], rect)
+                pygame.draw.rect(GAME_WINDOW, gc.COLORS['RED'], rect, 2)
 
-                over = font.render('Game Over', True, BLACK)
+                over = font.render('Game Over', True, gc.COLORS['BLACK'])
                 GAME_WINDOW.blit(over, (rect.centerx - over.get_width() // 2, rect.y + 10))
 
                 winner = '1' if self.p1_score > self.p2_score else '2'
-                winner_img = font.render(f'Player {winner} Won', True, GREEN)
+                winner_img = font.render(f'Player {winner} Won', True, gc.COLORS['GREEN'])
                 GAME_WINDOW.blit(winner_img, (rect.centerx - winner_img.get_width() // 2, rect.centery - 10))
 
                 msg = 'Press r:restart, q:quit'
-                msgimg = font.render(msg, True, RED)
+                msgimg = font.render(msg, True, gc.COLORS['RED'])
                 GAME_WINDOW.blit(msgimg, (rect.centerx - msgimg.get_width() // 2, rect.centery + 20))
 
             pygame.display.update()
