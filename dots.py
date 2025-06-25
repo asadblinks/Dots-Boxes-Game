@@ -441,6 +441,89 @@ class Game:
 
         return selected_size
 
+    def draw_game_over_screen(self, window: pygame.Surface, window_width: int, window_height: int) -> None:
+        """Draw the game over screen with results and options."""
+        # Create semi-transparent overlay for the entire window
+        overlay = pygame.Surface((window_width, window_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 128))  # Semi-transparent black
+        window.blit(overlay, (0, 0))
+
+        # Calculate panel dimensions - increased height
+        panel_width = min(300, window_width - gc.PADDING)
+        panel_height = min(400, window_height - gc.PADDING)  # Increased from 350 to 400
+
+        # Center the panel
+        panel_x = (window_width - panel_width) // 2
+        panel_y = (window_height - panel_height) // 2
+
+        # Create and draw the panel
+        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel.fill((*gc.COLORS['WHITE'][:3], 245))
+
+        # Add decorative borders
+        panel_rect = pygame.Rect(0, 0, panel_width, panel_height)
+        pygame.draw.rect(panel, gc.COLORS['RED'], panel_rect, 2)
+        pygame.draw.rect(panel, (*gc.COLORS['BLUE'][:3], 128), panel_rect.inflate(-4, -4), 2)
+
+        # Game Over text - slightly reduced size
+        game_over_font = pygame.font.SysFont(gc.FONT_NAME, int(panel_height * 0.10))
+        over_text = game_over_font.render('Game Over', True, gc.COLORS['BLACK'])
+        over_rect = over_text.get_rect(centerx=panel_width // 2, y=panel_height * 0.08)
+        panel.blit(over_text, over_rect)
+
+        # Scores - reduced size and spacing
+        score_font = pygame.font.SysFont(gc.FONT_NAME, int(panel_height * 0.07))
+
+        # Player 1 score
+        p1_color = gc.COLORS['BLUE']
+        p1_score_text = score_font.render(f'Player 1: {self.p1_score}', True, p1_color)
+        p1_rect = p1_score_text.get_rect(
+            centerx=panel_width // 2,
+            y=over_rect.bottom + panel_height * 0.06
+        )
+        panel.blit(p1_score_text, p1_rect)
+
+        # Player 2 score
+        p2_color = gc.COLORS['RED']
+        p2_score_text = score_font.render(f'Player 2: {self.p2_score}', True, p2_color)
+        p2_rect = p2_score_text.get_rect(
+            centerx=panel_width // 2,
+            y=p1_rect.bottom + panel_height * 0.04
+        )
+        panel.blit(p2_score_text, p2_rect)
+
+        # Winner announcement - adjusted position
+        winner = '1' if self.p1_score > self.p2_score else '2'
+        winner_color = p1_color if winner == '1' else p2_color
+        winner_text = score_font.render(f'Player {winner} Wins!', True, winner_color)
+        winner_rect = winner_text.get_rect(
+            centerx=panel_width // 2,
+            y=p2_rect.bottom + panel_height * 0.06
+        )
+        panel.blit(winner_text, winner_rect)
+
+        # Options - adjusted font size and spacing
+        options_font = pygame.font.SysFont(gc.FONT_NAME, int(panel_height * 0.05))
+
+        # Restart option - moved up
+        restart_text = options_font.render('Press R: Restart Game', True, gc.COLORS['BLACK'])
+        restart_rect = restart_text.get_rect(
+            centerx=panel_width // 2,
+            y=winner_rect.bottom + panel_height * 0.10
+        )
+        panel.blit(restart_text, restart_rect)
+
+        # Quit option - increased spacing from restart option
+        quit_text = options_font.render('Press Q/ESC: Quit Game', True, gc.COLORS['BLACK'])
+        quit_rect = quit_text.get_rect(
+            centerx=panel_width // 2,
+            y=restart_rect.bottom + panel_height * 0.08
+        )
+        panel.blit(quit_text, quit_rect)
+
+        # Draw the panel on the window
+        window.blit(panel, (panel_x, panel_y))
+
     def run(self):
         # Show menu and get selected grid size
         selected_size = self.show_menu()
@@ -497,20 +580,7 @@ class Game:
             self.draw_turn_indicator(GAME_WINDOW, WIDTH)
 
             if self.gameover:
-                rect = pygame.Rect((50, 100, WIDTH - 100, HEIGHT - 200))
-                pygame.draw.rect(GAME_WINDOW, gc.COLORS['WHITE'], rect)
-                pygame.draw.rect(GAME_WINDOW, gc.COLORS['RED'], rect, 2)
-
-                over = font.render('Game Over', True, gc.COLORS['BLACK'])
-                GAME_WINDOW.blit(over, (rect.centerx - over.get_width() // 2, rect.y + 10))
-
-                winner = '1' if self.p1_score > self.p2_score else '2'
-                winner_img = font.render(f'Player {winner} Won', True, gc.COLORS['GREEN'])
-                GAME_WINDOW.blit(winner_img, (rect.centerx - winner_img.get_width() // 2, rect.centery - 10))
-
-                msg = 'Press r:restart, q:quit'
-                msgimg = font.render(msg, True, gc.COLORS['RED'])
-                GAME_WINDOW.blit(msgimg, (rect.centerx - msgimg.get_width() // 2, rect.centery + 20))
+                self.draw_game_over_screen(GAME_WINDOW, WIDTH, HEIGHT)
 
             pygame.display.update()
 
