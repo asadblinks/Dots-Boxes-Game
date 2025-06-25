@@ -36,6 +36,7 @@ class Cell:
         self.text: Optional[str] = None
         self.edge_threshold = gc.EDGE_THRESHOLD
         self.instances: List['Cell'] = []
+        self.hovered_edge: Optional[int] = None  # Track which edge is being hovered
 
         self.rect = pygame.Rect((self.c, self.r, gc.CELL_SIZE, gc.CELL_SIZE))
 
@@ -85,6 +86,7 @@ class Cell:
                 text = font.render(self.text, True, gc.COLORS['BLACK'])
                 window_panel.blit(text, (self.rect.centerx - 10, self.rect.centery - 15))
 
+        # Draw completed lines
         for i, side in enumerate(self.sides):
             if side:
                 edge_side = list(self.edges.keys())[i]
@@ -93,7 +95,19 @@ class Cell:
                 line_end = tuple(
                     v - 1 if v == edge_side else v for v in self.edges[edge_side][1])
                 pygame.draw.line(window_panel, gc.COLORS['BLACK'],
-                               line_start, line_end, 2)
+                               line_start, line_end, 4)
+            # Draw hover effect
+            elif self.hovered_edge == i:
+                edge_side = list(self.edges.keys())[i]
+                line_start = tuple(
+                    v - 1 if v == edge_side else v for v in self.edges[edge_side][0])
+                line_end = tuple(
+                    v - 1 if v == edge_side else v for v in self.edges[edge_side][1])
+                # Draw a semi-transparent line for hover effect
+                hover_surface = pygame.Surface((window_panel.get_width(), window_panel.get_height()), pygame.SRCALPHA)
+                pygame.draw.line(hover_surface, (*gc.COLORS['BLUE'][:3], 128),  # Semi-transparent blue
+                               line_start, line_end, 4)
+                window_panel.blit(hover_surface, (0, 0))
 
     def update_sides(self, edge_value, user):
         # Update cell's side and other cell around it.
@@ -138,6 +152,42 @@ class Cell:
                 if n_cell_fill:
                     is_turn_next = False
         return is_turn_next, n_cell_fill
+
+    def check_hover(self, mouse_pos: Tuple[int, int]) -> bool:
+        """Check if mouse is hovering near any edge and update hover state.
+
+        Args:
+            mouse_pos: Current mouse position (x, y)
+
+        Returns:
+            bool: True if mouse is hovering near an edge
+        """
+        x, y = mouse_pos
+        dist_left = abs(x - self.rect.left)
+        dist_right = abs(x - self.rect.right)
+        dist_top = abs(y - self.rect.top)
+        dist_bottom = abs(y - self.rect.bottom)
+
+        # Check if mouse is within the cell's extended boundaries
+        if (self.rect.left - self.edge_threshold <= x <= self.rect.right + self.edge_threshold and
+            self.rect.top - self.edge_threshold <= y <= self.rect.bottom + self.edge_threshold):
+
+            # Find the nearest edge
+            distances = [
+                (dist_left, 0),    # LEFT
+                (dist_top, 1),     # TOP
+                (dist_right, 2),   # RIGHT
+                (dist_bottom, 3)   # BOTTOM
+            ]
+
+            min_dist, edge_index = min(distances)
+
+            if min_dist <= self.edge_threshold and not self.sides[edge_index]:
+                self.hovered_edge = edge_index
+                return True
+
+        self.hovered_edge = None
+        return False
 
 class Game:
     """Main game controller class for Dots and Boxes.
@@ -261,6 +311,53 @@ class Game:
         """
         return self.moves[player]
 
+    def draw_turn_indicator(self, window: pygame.Surface, width: int) -> None:
+        """Draw an enhanced visual indicator for the current player's turn.
+
+        Args:
+            window: The game window surface to draw on
+            width: Width of the game window
+        """
+        # Draw player scores with enhanced styling
+        p1_color = gc.COLORS['BLUE']
+        p2_color = gc.COLORS['RED']
+
+        # Player 1 score and indicator
+        p1_text = f'Player 1: {self.p1_score}'
+        p1_img = font.render(p1_text, True, p1_color)
+        p1_rect = p1_img.get_rect()
+        text_pads = gc.PADDING // 3
+        p1_rect.x, p1_rect.y = text_pads, 25
+
+        # Player 2 score and indicator
+        p2_text = f'Player 2: {self.p2_score}'
+        p2_img = font.render(p2_text, True, p2_color)
+        p2_rect = p2_img.get_rect()
+        p2_rect.right, p2_rect.y = width - text_pads, 25
+
+        # Draw the scores
+        window.blit(p1_img, p1_rect)
+        window.blit(p2_img, p2_rect)
+
+        # Determine current player's rectangle and color
+        current_rect = p1_rect if self.player == 'X' else p2_rect
+        current_color = p1_color if self.player == 'X' else p2_color
+
+        # Draw active player indicator
+        indicator_height = 4
+        # Bottom line
+        pygame.draw.line(window, current_color,
+                        (current_rect.x, current_rect.bottom + 2),
+                        (current_rect.right, current_rect.bottom + 2),
+                        indicator_height)
+
+        # Draw a subtle background highlight for current player
+        highlight_rect = current_rect.inflate(20, 10)
+        highlight_surface = pygame.Surface((highlight_rect.width, highlight_rect.height), pygame.SRCALPHA)
+        highlight_color = (*current_color[:3], 30)  # Very transparent version of player color
+        pygame.draw.rect(highlight_surface, highlight_color, highlight_surface.get_rect(), border_radius=5)
+        window.blit(highlight_surface, highlight_rect)
+
     def run(self):
         WIDTH, HEIGHT = self.window_dimension()
         GAME_WINDOW = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -273,6 +370,9 @@ class Game:
         while run:
             clock.tick(60)
             GAME_WINDOW.fill(gc.COLORS['WHITE'])
+
+            # Get current mouse position for hover effects
+            current_mouse_pos = pygame.mouse.get_pos()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -297,27 +397,17 @@ class Game:
             if mouse_cord:
                 pygame.draw.circle(GAME_WINDOW, gc.COLORS['RED'], mouse_cord, 2)
 
+            # Update and draw cells, including hover effects
             for cell in cells:
+                # Check for hover effects before handling clicks
+                cell.check_hover(current_mouse_pos)
+
                 if mouse_cord and cell.rect.collidepoint(mouse_cord):
                     self.is_cell_clicked(cell, mouse_cord)
                 cell.update(GAME_WINDOW)
 
-            p1img = font.render('Player 1: {}'.format(self.p1_score), True, gc.COLORS['BLUE'])
-            p1rect = p1img.get_rect()
-            text_pads = gc.PADDING // 3
-            p1rect.x, p1rect.y = text_pads, 25
-
-            p2img = font.render('Player 2: {}'.format(self.p2_score), True, gc.COLORS['BLUE'])
-            p2rect = p2img.get_rect()
-            p2rect.right, p2rect.y = WIDTH - text_pads, 25
-
-            GAME_WINDOW.blit(p1img, p1rect)
-            GAME_WINDOW.blit(p2img, p2rect)
-
-            turn_rectangle = p1rect if self.player == 'X' else p2rect
-            pygame.draw.line(GAME_WINDOW, gc.COLORS['RED'],
-                           (turn_rectangle.x, turn_rectangle.bottom + 2),
-                           (turn_rectangle.right, turn_rectangle.bottom + 2), 4)
+            # Draw the enhanced turn indicator
+            self.draw_turn_indicator(GAME_WINDOW, WIDTH)
 
             if self.gameover:
                 rect = pygame.Rect((50, 100, WIDTH - 100, HEIGHT - 200))
