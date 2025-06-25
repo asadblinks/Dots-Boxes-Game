@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 def _get_default_colors() -> Dict[str, Tuple[int, int, int]]:
     """Return the default color configuration."""
@@ -29,9 +29,12 @@ class GameConfig:
 
     # Game configurations
     DEFAULT_GRID_SIZE: int = 3
+    GRID_SIZES: List[int] = field(default_factory=lambda: [3, 5, 7])
+    MENU_WIDTH: int = 500
+    MENU_HEIGHT: int = 600
 
 # Create a singleton instance
 gc = GameConfig()
 
 # Clean up namespace
-del dataclass, field, Dict, Tuple, _get_default_colors
+del dataclass, field, Dict, Tuple, List, _get_default_colors

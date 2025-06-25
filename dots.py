@@ -358,7 +358,94 @@ class Game:
         pygame.draw.rect(highlight_surface, highlight_color, highlight_surface.get_rect(), border_radius=5)
         window.blit(highlight_surface, highlight_rect)
 
+    def show_menu(self) -> int:
+        """Display the game menu and handle grid size selection."""
+        pygame.init()
+        menu_window = pygame.display.set_mode((gc.MENU_WIDTH, gc.MENU_HEIGHT))
+        pygame.display.set_caption("Dots and Boxes - Menu")
+
+        title_font = pygame.font.SysFont(gc.FONT_NAME, gc.FONT_SIZE * 2)
+        button_font = pygame.font.SysFont(gc.FONT_NAME, gc.FONT_SIZE)
+
+        # Create buttons for each grid size
+        buttons = []
+        button_height = 60
+        button_width = 200
+        spacing = 30  # Increased spacing
+
+        # Draw title
+        title = title_font.render("Dots and Boxes", True, gc.COLORS['BLACK'])
+        title_rect = title.get_rect(centerx=gc.MENU_WIDTH // 2, y=50)
+
+        # Draw subtitle with more space
+        subtitle = button_font.render("Select Grid Size", True, gc.COLORS['BLUE'])
+        subtitle_rect = subtitle.get_rect(centerx=gc.MENU_WIDTH // 2, y=title_rect.bottom + 40)
+
+        # Adjust starting position for buttons to be below subtitle
+        start_y = subtitle_rect.bottom + spacing
+
+        for size in gc.GRID_SIZES:
+            button_rect = pygame.Rect(
+                (gc.MENU_WIDTH - button_width) // 2,
+                start_y,
+                button_width,
+                button_height
+            )
+            buttons.append((button_rect, size))
+            start_y += button_height + spacing
+
+        selected_size = gc.DEFAULT_GRID_SIZE
+        running = True
+
+        while running:
+            menu_window.fill(gc.COLORS['WHITE'])
+
+            # Draw title and subtitle
+            menu_window.blit(title, title_rect)
+            menu_window.blit(subtitle, subtitle_rect)
+
+            # Handle events
+            mouse_pos = pygame.mouse.get_pos()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return selected_size
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    for button, size in buttons:
+                        if button.collidepoint(mouse_pos):
+                            selected_size = size
+                            running = False
+
+            # Draw buttons
+            for button, size in buttons:
+                # Check hover
+                hover = button.collidepoint(mouse_pos)
+
+                # Draw button background
+                if hover:
+                    pygame.draw.rect(menu_window, gc.COLORS['BLUE'], button)
+                    text_color = gc.COLORS['WHITE']
+                else:
+                    pygame.draw.rect(menu_window, gc.COLORS['WHITE'], button)
+                    pygame.draw.rect(menu_window, gc.COLORS['BLUE'], button, 2)
+                    text_color = gc.COLORS['BLUE']
+
+                # Draw button text
+                text = button_font.render(f"{size} x {size} Grid", True, text_color)
+                text_rect = text.get_rect(center=button.center)
+                menu_window.blit(text, text_rect)
+
+            pygame.display.flip()
+
+        return selected_size
+
     def run(self):
+        # Show menu and get selected grid size
+        selected_size = self.show_menu()
+        self.initialize_game(selected_size)
+
         WIDTH, HEIGHT = self.window_dimension()
         GAME_WINDOW = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Dots and Boxes")
@@ -428,4 +515,3 @@ class Game:
             pygame.display.update()
 
         pygame.quit()
-
